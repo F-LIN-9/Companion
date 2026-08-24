@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <title>亲语 · 银发语音助手</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <div id="app">
+        <!-- ===== 顶部 ===== -->
+        <header>
+            <div class="logo">?? 亲语</div>
+            <div class="subtitle">慢慢说，我在听</div>
+        </header>
+
+        <!-- ===== 对话展示区 ===== -->
+        <main id="chatArea">
+            <div id="messageList">
+                <!-- 对话气泡由 JavaScript 动态渲染 -->
+                <div class="msg-bot first-msg">
+                    <div class="avatar">??</div>
+                    <div class="bubble">
+                        您好呀，我是亲语。<br />
+                        按住下面的大按钮，把您想说的话告诉我。<br />
+                        我会帮您把话说清楚，再帮您打给家人。
+                    </div>
+                </div>
+            </div>
+            <!-- 底部占位，保证滚动不遮挡按钮 -->
+            <div style="height: 120px;"></div>
+        </main>
+
+        <!-- ===== 底部操作栏 ===== -->
+        <footer>
+            <!-- 状态提示 -->
+            <div id="statusTip">?? 按住说话，松开结束</div>
+
+            <!-- 主按钮：按住录音 -->
+            <button id="recordBtn" class="record-btn">
+                <span id="btnIcon">??</span>
+                <span id="btnText">按住 说话</span>
+            </button>
+
+            <!-- 辅助功能：拨打电话 / 重新生成 -->
+            <div class="action-row">
+                <button id="callBtn" class="action-btn" disabled>?? 拨给家人</button>
+                <button id="regenerateBtn" class="action-btn" disabled>?? 再说一遍</button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- ===== 引入 JavaScript ===== -->
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+/* ===== 全局重置，适老化大字体 ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #f5f1eb;  /* 暖色调护眼背景 */
+    color: #2c2c2c;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;  /* 防止老人误触选中文字 */
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 480px;   /* 手机尺寸，在电脑上调试时居中 */
+    margin: 0 auto;
+    background: #ffffff;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
+    position: relative;
+}
+
+/* ===== 顶部 ===== */
+header {
+    background: linear-gradient(135deg, #e8d5b5, #dcc3a0);
+    padding: 20px 24px 14px 24px;
+    text-align: center;
+    flex-shrink: 0;
+    border-bottom: 1px solid #d6c3a8;
+}
+
+.logo {
+    font-size: 28px;
+    font-weight: 600;
+    color: #4a3729;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    font-size: 16px;
+    color: #6b5a4a;
+    margin-top: 4px;
+    font-weight: 400;
+}
+
+/* ===== 对话区域（滚动） ===== */
+#chatArea {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 16px 0 16px;
+    background: #fcf9f6;
+    display: flex;
+    flex-direction: column;
+}
+
+#messageList {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 8px;
+}
+
+/* ===== 气泡样式 ===== */
+.msg-bot, .msg-user {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 90%;
+    animation: fadeIn 0.3s ease;
+}
+
+.msg-bot {
+    align-self: flex-start;
+}
+
+.msg-user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e8ddd0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.msg-user .avatar {
+    background: #d4c5b5;
+}
+
+.bubble {
+    background: #ffffff;
+    padding: 14px 18px;
+    border-radius: 18px 18px 18px 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    font-size: 20px;        /* 大字号，适老 */
+    line-height: 1.6;
+    word-break: break-word;
+    color: #2c2c2c;
+    border: 1px solid #eee8e0;
+}
+
+.msg-user .bubble {
+    background: #e8dccc;
+    border-radius: 18px 18px 4px 18px;
+    border-color: #ddd0be;
+}
+
+.first-msg .bubble {
+    background: #f3efe8;
+    border-color: #e0d6c8;
+}
+
+/* ===== 底部固定栏 ===== */
+footer {
+    flex-shrink: 0;
+    background: #ffffff;
+    padding: 12px 20px 20px 20px;
+    border-top: 1px solid #e8e0d6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+#statusTip {
+    font-size: 18px;
+    color: #8a7a6a;
+    height: 28px;
+    transition: color 0.2s;
+}
+
+/* ===== 主录音按钮（巨大，易按） ===== */
+.record-btn {
+    width: 100%;
+    max-width: 320px;
+    height: 80px;
+    border: none;
+    border-radius: 60px;
+    background: linear-gradient(145deg, #dccbb8, #cbb8a2);
+    box-shadow: 0 6px 0 #b09a82, 0 10px 20px rgba(0,0,0,0.10);
+    font-size: 28px;
+    font-weight: 500;
+    color: #3d2e1e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transition: all 0.08s ease;
+    cursor: pointer;
+    touch-action: manipulation;
+    letter-spacing: 2px;
+}
+
+.record-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #b09a82, 0 8px 16px rgba(0,0,0,0.10);
+}
+
+.record-btn.recording {
+    background: linear-gradient(145deg, #e8c8b0, #dbb69a);
+    box-shadow: 0 6px 0 #b88a6e, 0 10px 20px rgba(0,0,0,0.15);
+    animation: pulse 1s infinite;
+}
+
+#btnIcon {
+    font-size: 36px;
+}
+
+#btnText {
+    font-size: 26px;
+}
+
+/* ===== 辅助按钮行 ===== */
+.action-row {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    max-width: 320px;
+    justify-content: center;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 14px 0;
+    border: none;
+    border-radius: 40px;
+    font-size: 22px;
+    font-weight: 400;
+    background: #f0ebe4;
+    color: #6b5a4a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    transition: all 0.2s;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.action-btn:active {
+    transform: scale(0.96);
+}
+
+.action-btn:disabled {
+    opacity: 0.35;
+    transform: none;
+    cursor: not-allowed;
+}
+
+.action-btn.active-btn {
+    background: #dccbb8;
+    color: #3d2e1e;
+}
+
+/* ===== 动画 ===== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.75; }
+    100% { opacity: 1; }
+}
+
+/* ===== 滚动条美化 ===== */
+#chatArea::-webkit-scrollbar {
+    width: 4px;
+}
+#chatArea::-webkit-scrollbar-track {
+    background: #f0ebe4;
+}
+#chatArea::-webkit-scrollbar-thumb {
+    background: #d6c8b8;
+    border-radius: 4px;
+}
