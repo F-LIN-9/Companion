@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify, send_from_directory
 
 # 用绝对路径，避免 Render 上工作目录不匹配导致 "Not Found"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app = Flask(__name__, static_folder=BASE_DIR, static_url_path="")
+app = Flask(__name__)
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_CHAT_URL = "https://api.deepseek.com/v1/chat/completions"
@@ -203,6 +203,19 @@ def vision():
     except requests.exceptions.RequestException as e:
         app.logger.error("DeepSeek Vision API request failed: %s", e)
         return jsonify({"reply": "网络连接失败，请检查网络后重试。"}), 502
+
+
+# 显式处理静态文件（放最后，避免覆盖 API 路由）
+@app.route("/<path:filename>")
+def static_files(filename):
+    # 禁止访问敏感文件
+    dangerous = {"app.py", "requirements.txt"}
+    if filename in dangerous:
+        return "Forbidden", 403
+    file_path = os.path.join(BASE_DIR, filename)
+    if not os.path.isfile(file_path):
+        return "Not Found", 404
+    return send_from_directory(BASE_DIR, filename)
 
 
 if __name__ == "__main__":
