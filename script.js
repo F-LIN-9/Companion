@@ -83,8 +83,7 @@ modeBtns.forEach(btn => {
 // ---------- 语音识别 ----------
 function initSpeechRecognition() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        statusTip.textContent = '⚠️ 您的浏览器不支持语音，请使用 Chrome 或 Edge';
-        recordBtn.disabled = true;
+        statusTip.textContent = '⌨️ 打字输入，点发送即可';
         return null;
     }
 
