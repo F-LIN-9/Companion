@@ -349,64 +349,82 @@ function updateBotMessage(msgEl, newContent) {
 
 // ---------- 录音按钮交互 ----------
 function setupRecordButton() {
-    // 尝试初始化语音识别（可能失败，但不影响按钮事件绑定）
     if (!recognition) {
         recognition = initSpeechRecognition();
     }
 
-    let _touchHandled = false;
+    let _down = false;
 
-    // 按下：pointerdown + touchstart 双保险（标志位防抖，只触发一次）
+    // ---------- 按下 ----------
     const onDown = (e) => {
         e.preventDefault();
-        if (_touchHandled) return;
-        _touchHandled = true;
+        if (_down) return;          // 已在按下状态
+        _down = true;
 
-        if (isProcessing) return;
+        if (isProcessing) { _down = false; return; }
 
         if (currentMode === 'vision') {
+            _down = false;
             photoInput.click();
-            _touchHandled = false;
             return;
         }
 
         if (recognition) {
-            startRecording();
-        } else {
-            // 语音不可用：显示文字输入
-            if (textInputRow.style.display === 'none') {
-                textInputRow.style.display = 'flex';
+            _warmUpSpeech();
+            try {
+                recognition.start();
+                isRecording = true;
+                recordBtn.classList.add('recording');
+                btnIcon.textContent = '🔴';
+                btnText.textContent = '松开 结束';
+                statusTip.textContent = '🎙️ 正在听，慢慢说……';
+            } catch (err) {
+                console.warn('startRecording error:', err);
+                _down = false;
+                statusTip.textContent = '❌ 语音启动失败，请点发送打字';
+                if (textInputRow.style.display === 'none') textInputRow.style.display = 'flex';
             }
+        } else {
+            // 语音不可用：打字输入
+            if (textInputRow.style.display === 'none') textInputRow.style.display = 'flex';
             textInput.focus();
             statusTip.textContent = '⌨️ 打字输入，点发送即可';
-            setTimeout(() => { _touchHandled = false; }, 300);
+            btnIcon.textContent = '⌨️';
+            btnText.textContent = '点击 打字';
+            setTimeout(() => { _down = false; }, 300);
         }
     };
 
-    // 松开：pointerup + touchend
+    // ---------- 松开 ----------
     const onUp = (e) => {
         e.preventDefault();
-        _touchHandled = false;
-        if (isRecording) stopRecording();
+        _down = false;
+        if (isRecording) {
+            isRecording = false;
+            recordBtn.classList.remove('recording');
+            try { recognition.stop(); } catch (_) {}
+            setTimeout(() => {
+                resetButton();
+                statusTip.textContent = MODE_META[currentMode].tip;
+            }, 500);
+        }
     };
 
-    // 滑出 / 取消
-    const onCancel = () => {
-        _touchHandled = false;
-        if (isRecording) stopRecording();
-    };
+    // ---------- 绑定事件（只用一个事件系统，避免双触发）----------
+    const IS_TOUCH = 'ontouchstart' in window;
 
-    recordBtn.addEventListener('pointerdown', onDown);
-    recordBtn.addEventListener('pointerup', onUp);
-    recordBtn.addEventListener('pointerleave', onCancel);
-    recordBtn.addEventListener('pointercancel', onCancel);
+    if (IS_TOUCH) {
+        recordBtn.addEventListener('touchstart', onDown, { passive: false });
+        recordBtn.addEventListener('touchend', onUp);
+        recordBtn.addEventListener('touchcancel', onUp);
+    } else {
+        recordBtn.addEventListener('pointerdown', onDown);
+        recordBtn.addEventListener('pointerup', onUp);
+        recordBtn.addEventListener('pointerleave', onUp);
+        recordBtn.addEventListener('pointercancel', onUp);
+    }
 
-    // 部分 Android WebView 不支持 pointer 事件，touch 作为兜底
-    recordBtn.addEventListener('touchstart', onDown, { passive: false });
-    recordBtn.addEventListener('touchend', onUp, { passive: false });
-    recordBtn.addEventListener('touchcancel', onCancel, { passive: false });
-
-    // 阻止长按菜单
+    // 阻止长按菜单（移动端）
     recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // 拍照回传
@@ -415,38 +433,6 @@ function setupRecordButton() {
         if (file) handlePhoto(file);
         photoInput.value = '';
     });
-}
-
-function startRecording() {
-    if (!recognition) return;
-    _warmUpSpeech();
-    try {
-        recognition.start();
-        isRecording = true;
-        recordBtn.classList.add('recording');
-        btnIcon.textContent = '🔴';
-        btnText.textContent = '松开 结束';
-        statusTip.textContent = '🎙️ 正在听，慢慢说……';
-    } catch (e) {
-        if (!e.message?.includes('already started')) {
-            console.warn('startRecording error:', e);
-        }
-    }
-}
-
-function stopRecording() {
-    if (!recognition || !isRecording) return;
-    isRecording = false;
-    recordBtn.classList.remove('recording');
-    try {
-        recognition.stop();
-    } catch (e) {
-        // 忽略 already stopped 等错误
-    }
-    setTimeout(() => {
-        resetButton();
-        statusTip.textContent = MODE_META[currentMode].tip;
-    }, 500);
 }
 
 // ---------- 辅助按钮 ----------
