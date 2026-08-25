@@ -4,24 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <title>亲语 · 银发语音助手</title>
-    <!-- 引入样式 -->
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
     <div id="app">
-        <!-- ===== 顶部 ===== -->
         <header>
-            <div class="logo">?? 亲语</div>
+            <div class="logo">💛 亲语</div>
             <div class="subtitle">慢慢说，我在听</div>
         </header>
 
-        <!-- ===== 对话展示区 ===== -->
         <main id="chatArea">
             <div id="messageList">
-                <!-- 对话气泡由 JavaScript 动态渲染 -->
                 <div class="msg-bot first-msg">
-                    <div class="avatar">??</div>
+                    <div class="avatar">🤖</div>
                     <div class="bubble">
                         您好呀，我是亲语。<br />
                         按住下面的大按钮，把您想说的话告诉我。<br />
@@ -29,30 +25,37 @@
                     </div>
                 </div>
             </div>
-            <!-- 底部占位，保证滚动不遮挡按钮 -->
-            <div style="height: 120px;"></div>
+            <div style="height: 160px;"></div>
         </main>
 
-        <!-- ===== 底部操作栏 ===== -->
         <footer>
-            <!-- 状态提示 -->
-            <div id="statusTip">?? 按住说话，松开结束</div>
+            <div id="statusTip">🎤 按住说话，松开结束</div>
 
-            <!-- 主按钮：按住录音 -->
+            <!-- 功能模式切换 -->
+            <div class="mode-bar">
+                <button class="mode-btn active" data-mode="default">💬 帮我说清</button>
+                <button class="mode-btn" data-mode="doctor">🏥 就医辅助</button>
+                <button class="mode-btn" data-mode="fraud">🛡️ 防骗识别</button>
+                <button class="mode-btn" data-mode="medicine">💊 用药提醒</button>
+            </div>
+
+            <!-- 主录音按钮 -->
             <button id="recordBtn" class="record-btn">
-                <span id="btnIcon">??</span>
+                <span id="btnIcon">🎤</span>
                 <span id="btnText">按住 说话</span>
             </button>
 
-            <!-- 辅助功能：拨打电话 / 重新生成 -->
+            <!-- 隐藏的文件选择器（拍照查价） -->
+            <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" />
+
+            <!-- 辅助按钮 -->
             <div class="action-row">
-                <button id="callBtn" class="action-btn" disabled>?? 拨给家人</button>
-                <button id="regenerateBtn" class="action-btn" disabled>?? 再说一遍</button>
+                <button id="callBtn" class="action-btn" disabled>📞 拨给家人</button>
+                <button id="regenerateBtn" class="action-btn" disabled>🔁 再说一遍</button>
             </div>
         </footer>
     </div>
 
-    <!-- ===== 引入 JavaScript ===== -->
     <script src="script.js"></script>
 </body>
 </html>

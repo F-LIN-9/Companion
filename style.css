@@ -7,18 +7,18 @@
 
 body {
     font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    background: #f5f1eb;  /* 暖色调护眼背景 */
+    background: #f5f1eb;
     color: #2c2c2c;
     height: 100vh;
     overflow: hidden;
-    user-select: none;  /* 防止老人误触选中文字 */
+    user-select: none;
 }
 
 #app {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    max-width: 480px;   /* 手机尺寸，在电脑上调试时居中 */
+    max-width: 480px;
     margin: 0 auto;
     background: #ffffff;
     box-shadow: 0 0 20px rgba(0,0,0,0.05);
@@ -48,7 +48,7 @@ header {
     font-weight: 400;
 }
 
-/* ===== 对话区域（滚动） ===== */
+/* ===== 对话区域 ===== */
 #chatArea {
     flex: 1;
     overflow-y: auto;
@@ -65,7 +65,7 @@ header {
     padding-bottom: 8px;
 }
 
-/* ===== 气泡样式 ===== */
+/* ===== 气泡 ===== */
 .msg-bot, .msg-user {
     display: flex;
     align-items: flex-start;
@@ -74,14 +74,8 @@ header {
     animation: fadeIn 0.3s ease;
 }
 
-.msg-bot {
-    align-self: flex-start;
-}
-
-.msg-user {
-    align-self: flex-end;
-    flex-direction: row-reverse;
-}
+.msg-bot { align-self: flex-start; }
+.msg-user { align-self: flex-end; flex-direction: row-reverse; }
 
 .avatar {
     width: 40px;
@@ -95,16 +89,14 @@ header {
     flex-shrink: 0;
 }
 
-.msg-user .avatar {
-    background: #d4c5b5;
-}
+.msg-user .avatar { background: #d4c5b5; }
 
 .bubble {
     background: #ffffff;
     padding: 14px 18px;
     border-radius: 18px 18px 18px 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    font-size: 20px;        /* 大字号，适老 */
+    font-size: 20px;
     line-height: 1.6;
     word-break: break-word;
     color: #2c2c2c;
@@ -122,16 +114,16 @@ header {
     border-color: #e0d6c8;
 }
 
-/* ===== 底部固定栏 ===== */
+/* ===== 底部栏 ===== */
 footer {
     flex-shrink: 0;
     background: #ffffff;
-    padding: 12px 20px 20px 20px;
+    padding: 10px 16px 18px 16px;
     border-top: 1px solid #e8e0d6;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 #statusTip {
@@ -141,11 +133,45 @@ footer {
     transition: color 0.2s;
 }
 
-/* ===== 主录音按钮（巨大，易按） ===== */
+/* ===== 模式切换按钮 ===== */
+.mode-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 320px;
+}
+
+.mode-btn {
+    padding: 12px 8px;
+    border: 2px solid #e0d6c8;
+    border-radius: 16px;
+    background: #fcf9f6;
+    color: #6b5a4a;
+    font-size: 18px;
+    font-weight: 400;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.mode-btn:active {
+    transform: scale(0.96);
+}
+
+.mode-btn.active {
+    background: #e8dccc;
+    border-color: #cbb8a2;
+    color: #3d2e1e;
+    font-weight: 600;
+}
+
+/* ===== 主录音按钮 ===== */
 .record-btn {
     width: 100%;
     max-width: 320px;
-    height: 80px;
+    height: 72px;
     border: none;
     border-radius: 60px;
     background: linear-gradient(145deg, #dccbb8, #cbb8a2);
@@ -159,7 +185,9 @@ footer {
     gap: 14px;
     transition: all 0.08s ease;
     cursor: pointer;
-    touch-action: manipulation;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
     letter-spacing: 2px;
 }
 
@@ -174,15 +202,15 @@ footer {
     animation: pulse 1s infinite;
 }
 
-#btnIcon {
-    font-size: 36px;
+.record-btn.photo-mode {
+    background: linear-gradient(145deg, #c8dcc8, #a8c8a8);
+    box-shadow: 0 6px 0 #7a9a7a, 0 10px 20px rgba(0,0,0,0.10);
 }
 
-#btnText {
-    font-size: 26px;
-}
+#btnIcon { font-size: 36px; }
+#btnText { font-size: 26px; }
 
-/* ===== 辅助按钮行 ===== */
+/* ===== 辅助按钮 ===== */
 .action-row {
     display: flex;
     gap: 16px;
@@ -206,16 +234,12 @@ footer {
     touch-action: manipulation;
 }
 
-.action-btn:active {
-    transform: scale(0.96);
-}
-
+.action-btn:active { transform: scale(0.96); }
 .action-btn:disabled {
     opacity: 0.35;
     transform: none;
     cursor: not-allowed;
 }
-
 .action-btn.active-btn {
     background: #dccbb8;
     color: #3d2e1e;
@@ -233,14 +257,7 @@ footer {
     100% { opacity: 1; }
 }
 
-/* ===== 滚动条美化 ===== */
-#chatArea::-webkit-scrollbar {
-    width: 4px;
-}
-#chatArea::-webkit-scrollbar-track {
-    background: #f0ebe4;
-}
-#chatArea::-webkit-scrollbar-thumb {
-    background: #d6c8b8;
-    border-radius: 4px;
-}
+/* ===== 滚动条 ===== */
+#chatArea::-webkit-scrollbar { width: 4px; }
+#chatArea::-webkit-scrollbar-track { background: #f0ebe4; }
+#chatArea::-webkit-scrollbar-thumb { background: #d6c8b8; border-radius: 4px; }

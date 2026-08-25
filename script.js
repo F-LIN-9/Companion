@@ -1,13 +1,17 @@
 // ================================================================
-// 亲语 · 核心逻辑
-// 功能：语音输入 → 调用 DeepSeek API 精简老人语言 → 语音播报
-// 技术：Web Speech API (语音识别 + 语音合成) + Fetch API
+// 亲语 · 银发语音助手 — 核心逻辑
+// 功能：语音输入 → 多模式 AI 处理 → 语音播报
+// 技术：Web Speech API + Fetch API + Canvas 图片压缩
 // ================================================================
 
-// ---------- 配置 ----------
-// 请替换成你自己的 DeepSeek API Key（免费申请：platform.deepseek.com）
-const DEEPSEEK_API_KEY = 'sk-9725cc304b40426f8d51e244cd71d063';  
-const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
+// ---------- 后端地址 ----------
+const API_BASE = window.location.origin;
+
+// ---------- 语音识别支持检测 ----------
+const SPEECH_SUPPORTED = !!(
+    (window.SpeechRecognition || window.webkitSpeechRecognition) &&
+    !/iPhone|iPad|iPod/.test(navigator.userAgent)
+);
 
 // ---------- DOM 引用 ----------
 const messageList = document.getElementById('messageList');
@@ -17,19 +21,66 @@ const btnText = document.getElementById('btnText');
 const statusTip = document.getElementById('statusTip');
 const callBtn = document.getElementById('callBtn');
 const regenerateBtn = document.getElementById('regenerateBtn');
+const photoInput = document.getElementById('photoInput');
+const modeBtns = document.querySelectorAll('.mode-btn');
 
 // ---------- 状态 ----------
+let currentMode = 'default';       // default | doctor | fraud | vision | medicine
 let isRecording = false;
 let isProcessing = false;
-let lastUserText = '';          // 用户最后一次输入的原文
-let lastAssistantText = '';     // AI最后一次回复的精简文本
+let lastUserText = '';
+let lastAssistantText = '';
 let recognition = null;
-let synth = window.speechSynthesis;
+let synth = null;
 
-// ---------- 初始化语音识别 ----------
+// ---------- 模式元数据 ----------
+const MODE_META = {
+    default:  { icon: '💬', label: '帮我说清', tip: '按住说话，帮您把话说清楚' },
+    doctor:   { icon: '🏥', label: '就医辅助', tip: '哪里不舒服？慢慢说' },
+    fraud:    { icon: '🛡️', label: '防骗识别', tip: '把可疑的话复述一遍' },
+    vision:   { icon: '📷', label: '拍照查价', tip: '点击按钮拍照，识别产品' },
+    medicine: { icon: '💊', label: '用药提醒', tip: '告诉我您吃什么药、什么时候吃' }
+};
+
+// ---------- 模拟回复 ----------
+const SIMULATE_REPLIES = {
+    default:  (t) => t.length > 30 ? t.split(/[，,。.！!？?]/).filter(s => s.trim().length > 3).slice(0, 2).join('，') + '。' : t + '，我知道了。',
+    doctor:   () => '请告诉我：哪里不舒服？持续多久了？有多严重？我来帮您整理成就医信息。',
+    fraud:    () => '请把对方说的话复述一遍，我帮您判断是不是诈骗。',
+    vision:   () => '请点击按钮拍照，我会帮您识别产品和价格。',
+    medicine: () => '请告诉我您吃什么药，每天什么时间吃，我来帮您记着。'
+};
+
+// ---------- 模式切换 ----------
+function switchMode(mode) {
+    currentMode = mode;
+    modeBtns.forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+
+    const meta = MODE_META[mode];
+    statusTip.textContent = meta.tip;
+    btnIcon.textContent = meta.icon;
+    btnText.textContent = mode === 'vision' ? '点击 拍照' : '按住 说话';
+
+    // 拍照模式特殊样式
+    if (mode === 'vision') {
+        recordBtn.classList.add('photo-mode');
+    } else {
+        recordBtn.classList.remove('photo-mode');
+    }
+}
+
+modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (isProcessing) return;
+        switchMode(btn.dataset.mode);
+    });
+});
+
+// ---------- 语音识别 ----------
 function initSpeechRecognition() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        statusTip.textContent = '?? 您的浏览器不支持语音识别，请使用 Chrome 或 Edge';
+        statusTip.textContent = '⚠️ 您的浏览器不支持语音，请使用 Chrome 或 Edge';
         recordBtn.disabled = true;
         return null;
     }
@@ -37,18 +88,16 @@ function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SpeechRecognition();
     rec.lang = 'zh-CN';
-    rec.continuous = false;       // 单次识别，说完即止
-    rec.interimResults = false;   // 只返回最终结果，避免老人困惑
+    rec.continuous = false;
+    rec.interimResults = false;
     rec.maxAlternatives = 1;
 
-    // 识别结果
     rec.onresult = (event) => {
-        const last = event.results.length - 1;
-        const text = event.results[last][0].transcript;
+        const text = event.results[event.results.length - 1][0].transcript;
         if (text && text.trim().length > 0) {
-            handleUserSpeech(text.trim());
+            handleUserInput(text.trim());
         } else {
-            statusTip.textContent = '?? 没听清，再按一次说吧';
+            statusTip.textContent = '😕 没听清，再试一次吧';
             resetButton();
         }
     };
@@ -56,219 +105,233 @@ function initSpeechRecognition() {
     rec.onerror = (event) => {
         console.warn('语音识别错误:', event.error);
         if (event.error === 'not-allowed') {
-            statusTip.textContent = '?? 请允许使用麦克风权限';
+            statusTip.textContent = '🔒 请允许麦克风权限后再试';
         } else if (event.error === 'no-speech') {
-            statusTip.textContent = '?? 没有说话吗？再按一次试试';
+            statusTip.textContent = '🤔 没听到声音，再试一次';
         } else {
-            statusTip.textContent = '? 出了点小问题，再试一次';
+            statusTip.textContent = '❌ 出了点小问题，再试一次';
         }
         resetButton();
     };
 
     rec.onend = () => {
-        // 如果正在录音状态但结束了（用户松手触发 stop），但没产生结果
-        if (isRecording) {
-            // 防止在 onresult 之后再次触发 reset 导致重复
-            // 用延迟确保 onresult 先执行
-            setTimeout(() => {
-                if (isRecording) {
-                    resetButton();
-                    statusTip.textContent = '?? 按住说话，松开结束';
-                }
-            }, 300);
-        }
+        setTimeout(() => {
+            if (isRecording) {
+                resetButton();
+                statusTip.textContent = MODE_META[currentMode].tip;
+            }
+        }, 300);
     };
 
     return rec;
 }
 
-// ---------- 重置按钮状态 ----------
+// ---------- 按钮状态 ----------
 function resetButton() {
     isRecording = false;
     recordBtn.classList.remove('recording');
-    btnIcon.textContent = '??';
-    btnText.textContent = '按住 说话';
-    if (!isProcessing) {
-        // 如果不在处理中，恢复提示；否则由处理函数接管
-        // 但为了安全，不覆盖处理中的状态
-    }
+    btnIcon.textContent = MODE_META[currentMode].icon;
+    btnText.textContent = currentMode === 'vision' ? '点击 拍照' : '按住 说话';
 }
 
-// ---------- 处理用户语音输入 ----------
-async function handleUserSpeech(text) {
+// ---------- 处理用户输入（语音或文字） ----------
+async function handleUserInput(text) {
     if (isProcessing) return;
     isProcessing = true;
     lastUserText = text;
 
-    // 1. 显示用户消息
     appendMessage('user', text);
+    const botMsgId = appendMessage('bot', '⏳ 正在处理……', true);
 
-    // 2. 显示“正在思考”
-    const botMsgId = appendMessage('bot', '? 正在帮您整理……', true);
-
-    // 3. 调用 DeepSeek 精简语言
     try {
-        const simplified = await callDeepSeek(text);
-        lastAssistantText = simplified;
+        const reply = await callAPI(text);
+        lastAssistantText = reply;
+        updateBotMessage(botMsgId, reply);
+        speakText(reply);
 
-        // 更新机器人的回复（替换占位）
-        updateBotMessage(botMsgId, simplified);
-
-        // 4. 语音播报精简结果
-        speakText(simplified);
-
-        // 5. 启用辅助按钮
         callBtn.disabled = false;
         regenerateBtn.disabled = false;
         callBtn.classList.add('active-btn');
         regenerateBtn.classList.add('active-btn');
 
-        statusTip.textContent = '? 已整理好，可以拨给家人了';
-
+        statusTip.textContent = '✅ 已整理好，可以拨给家人了';
     } catch (error) {
-        console.error('DeepSeek 调用失败:', error);
-        updateBotMessage(botMsgId, '?? 网络有点忙，请您再试一次好吗？');
-        statusTip.textContent = '?? 连接失败，检查网络或 API Key';
+        console.error('API 调用失败:', error);
+        const fallback = SIMULATE_REPLIES[currentMode](text);
+        updateBotMessage(botMsgId, fallback);
+        lastAssistantText = fallback;
+        speakText(fallback);
+        statusTip.textContent = '⚠️ 网络不太稳，用了本地处理';
     } finally {
         isProcessing = false;
         resetButton();
     }
 }
 
-// ---------- 调用 DeepSeek API ----------
-async function callDeepSeek(userText) {
-    if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'sk-你的DeepSeek密钥') {
-        // 未配置 API Key 时使用模拟回复（演示用）
-        return simulateReply(userText);
+// ---------- 调用后端 API ----------
+async function callAPI(userText) {
+    const response = await fetch(`${API_BASE}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText, mode: currentMode })
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.reply || `请求失败(${response.status})`);
     }
 
-    const systemPrompt = `你是一位耐心、温和的晚辈助手，专门帮老年人把话说清楚。
+    const data = await response.json();
+    return data.reply?.trim() || '抱歉，AI 没有返回内容，请再试一次。';
+}
 
-任务：用户（老人）说了一段话，可能很啰嗦、跳跃、夹杂很多背景信息。请你：
-1. 理解老人真正想表达的核心意思。
-2. 用简洁、清晰、有条理的语言重新组织，保留老人的情感和语气。
-3. 最终输出只包含精简后的内容，不要添加任何额外解释、不要评价老人的表达。
+// ---------- 拍照查价 ----------
+async function handlePhoto(file) {
+    if (isProcessing) return;
+    isProcessing = true;
 
-示例：
-用户："哎呀，我那个儿子啊，就是小刚，他好久没回来了，我上回给他打电话，他说忙，我这心里头啊，老惦记着，也不知道他吃饭吃得好不好，你说这孩子……"
-输出："小刚最近忙，好久没回家了。我惦记他，担心他吃不好。"
-
-现在请处理以下内容：`;
+    appendMessage('user', '📷 已拍照，正在识别……');
+    const botMsgId = appendMessage('bot', '🔍 正在识别产品……', true);
 
     try {
-        const response = await fetch(DEEPSEEK_URL, {
+        const base64 = await compressImage(file);
+        const response = await fetch(`${API_BASE}/api/vision`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userText }
-                ],
-                temperature: 0.7,
-                max_tokens: 500
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
         });
 
         if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`API 请求失败: ${response.status} ${errText}`);
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.reply || `请求失败(${response.status})`);
         }
 
         const data = await response.json();
-        const reply = data.choices?.[0]?.message?.content?.trim();
-        if (!reply) {
-            throw new Error('API 返回内容为空');
-        }
-        return reply;
+        const reply = data.reply?.trim() || '无法识别该产品，请再拍一张清晰的照片。';
+        lastAssistantText = reply;
+        updateBotMessage(botMsgId, reply);
+        speakText(reply);
 
+        callBtn.disabled = false;
+        regenerateBtn.disabled = false;
+        callBtn.classList.add('active-btn');
+        regenerateBtn.classList.add('active-btn');
+
+        statusTip.textContent = '✅ 识别完成';
     } catch (error) {
-        console.warn('DeepSeek API 调用失败，使用模拟回复:', error.message);
-        return simulateReply(userText);
+        console.error('拍照识别失败:', error);
+        updateBotMessage(botMsgId, '📷 识别失败，请确保光线充足、产品清晰，再拍一次。');
+        statusTip.textContent = '⚠️ 识别失败，再试一次';
+    } finally {
+        isProcessing = false;
+        resetButton();
     }
 }
 
-// ---------- 模拟回复（当 API Key 未配置或网络不通时使用） ----------
-function simulateReply(text) {
-    // 如果用户说了很长的话，简单压缩
-    if (text.length > 30) {
-        // 提取关键句（按标点切分取前两句）
-        const sentences = text.split(/[，,。.！!？?、；;]/).filter(s => s.trim().length > 3);
-        if (sentences.length >= 2) {
-            return sentences.slice(0, 2).join('，') + '。';
-        }
-        return text.slice(0, 40) + '……（是这样吗？）';
-    }
-    return text + '，我知道了。';
-}
-
-// ---------- 语音合成（播报） ----------
-function speakText(text) {
-    if (!synth) {
-        synth = window.speechSynthesis;
-    }
-    // 取消之前未完成的播报
-    synth.cancel();
-
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'zh-CN';
-    utter.rate = 0.9;      // 稍慢，适合老人听
-    utter.pitch = 1.0;
-    utter.volume = 1.0;
-
-    // 尝试选择中文语音
-    const voices = synth.getVoices();
-    const zhVoice = voices.find(v => v.lang.startsWith('zh'));
-    if (zhVoice) utter.voice = zhVoice;
-
-    // 加载语音列表（部分浏览器需要异步加载）
-    if (voices.length === 0) {
-        synth.onvoiceschanged = () => {
-            const updated = synth.getVoices();
-            const zh = updated.find(v => v.lang.startsWith('zh'));
-            if (zh) utter.voice = zh;
-            synth.speak(utter);
+// ---------- 图片压缩（转 base64，限制大小） ----------
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const maxW = 800;
+                const scale = Math.min(1, maxW / img.width);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
         };
-        return;
-    }
-
-    synth.speak(utter);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
-// ---------- 渲染消息 ----------
-function appendMessage(role, content, isPlaceholder = false) {
+// ---------- 语音合成（iOS 兼容） ----------
+let _speechWarmedUp = false;
+
+function _ensureSynth() {
+    if (!synth) synth = window.speechSynthesis;
+    return synth;
+}
+
+function _warmUpSpeech() {
+    if (_speechWarmedUp) return;
+    const s = _ensureSynth();
+    const dummy = new SpeechSynthesisUtterance('');
+    dummy.volume = 0;
+    dummy.rate = 2;
+    s.speak(dummy);
+    _speechWarmedUp = true;
+}
+
+function speakText(text) {
+    const s = _ensureSynth();
+    s.cancel();
+
+    setTimeout(() => {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-CN';
+        utter.rate = 0.9;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+
+        const voices = s.getVoices();
+        const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+        if (zhVoice) utter.voice = zhVoice;
+
+        if (voices.length === 0) {
+            const onVoices = () => {
+                const updated = s.getVoices();
+                const zh = updated.find(v => v.lang.startsWith('zh'));
+                if (zh) utter.voice = zh;
+                s.speak(utter);
+                s.onvoiceschanged = null;
+            };
+            s.onvoiceschanged = onVoices;
+            setTimeout(() => {
+                if (s.onvoiceschanged === onVoices) {
+                    s.onvoiceschanged = null;
+                    s.speak(utter);
+                }
+            }, 1000);
+            return;
+        }
+
+        s.speak(utter);
+    }, 100);
+}
+
+// ---------- 消息渲染 ----------
+function appendMessage(role, content, isPlaceholder) {
     const div = document.createElement('div');
     div.className = `msg-${role}`;
-    const avatar = role === 'user' ? '??' : '??';
+    const avatar = role === 'user' ? '👴' : '🤖';
     const bubbleClass = 'bubble' + (isPlaceholder ? ' placeholder' : '');
-    div.innerHTML = `
-        <div class="avatar">${avatar}</div>
-        <div class="${bubbleClass}">${content}</div>
-    `;
+    div.innerHTML = `<div class="avatar">${avatar}</div><div class="${bubbleClass}">${content}</div>`;
     if (isPlaceholder) {
         div.dataset.placeholder = 'true';
         div.id = `msg-${Date.now()}`;
     }
     messageList.appendChild(div);
-    // 滚动到底部
     const chatArea = document.getElementById('chatArea');
     chatArea.scrollTop = chatArea.scrollHeight;
     return div;
 }
 
-function updateBotMessage(msgElement, newContent) {
-    if (!msgElement) return;
-    const bubble = msgElement.querySelector('.bubble');
+function updateBotMessage(msgEl, newContent) {
+    if (!msgEl) return;
+    const bubble = msgEl.querySelector('.bubble');
     if (bubble) {
         bubble.textContent = newContent;
         bubble.classList.remove('placeholder');
     }
-    // 滚动到底部
-    const chatArea = document.getElementById('chatArea');
-    chatArea.scrollTop = chatArea.scrollHeight;
+    document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
 }
 
 // ---------- 录音按钮交互 ----------
@@ -278,55 +341,54 @@ function setupRecordButton() {
         if (!recognition) return;
     }
 
-    // 按下开始录音
-    recordBtn.addEventListener('mousedown', (e) => {
+    // Pointer events 统一处理鼠标和触摸
+    recordBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (isProcessing) return;
+
+        if (currentMode === 'vision') {
+            photoInput.click();
+            return;
+        }
+
         startRecording();
     });
 
-    recordBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (isProcessing) return;
-        startRecording();
-    });
-
-    // 松开结束录音
-    recordBtn.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        if (isRecording) stopRecording();
-    });
-    recordBtn.addEventListener('touchend', (e) => {
+    recordBtn.addEventListener('pointerup', (e) => {
         e.preventDefault();
         if (isRecording) stopRecording();
     });
 
-    // 防止手指滑出按钮导致 touchend 不触发
-    recordBtn.addEventListener('touchcancel', (e) => {
-        e.preventDefault();
+    recordBtn.addEventListener('pointerleave', () => {
         if (isRecording) stopRecording();
     });
 
-    // 鼠标离开按钮区域也停止（防止按住后移出）
-    recordBtn.addEventListener('mouseleave', () => {
+    recordBtn.addEventListener('pointercancel', () => {
         if (isRecording) stopRecording();
+    });
+
+    recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // 拍照回传
+    photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handlePhoto(file);
+        photoInput.value = '';
     });
 }
 
 function startRecording() {
     if (!recognition) return;
+    _warmUpSpeech();
     try {
         recognition.start();
         isRecording = true;
         recordBtn.classList.add('recording');
-        btnIcon.textContent = '??';
+        btnIcon.textContent = '🔴';
         btnText.textContent = '松开 结束';
-        statusTip.textContent = '??? 正在听，慢慢说……';
+        statusTip.textContent = '🎙️ 正在听，慢慢说……';
     } catch (e) {
-        // 防止重复 start 报错
-        if (e.message && e.message.includes('already started')) {
-            // 忽略
-        } else {
+        if (!e.message?.includes('already started')) {
             console.warn('startRecording error:', e);
         }
     }
@@ -336,12 +398,10 @@ function stopRecording() {
     if (!recognition) return;
     try {
         recognition.stop();
-        // 注意：onend 会触发 reset，但这里先不重置，等 onresult 或 onend 处理
-        // 但为了防止卡死，加一个安全重置
         setTimeout(() => {
             if (isRecording) {
                 resetButton();
-                statusTip.textContent = '?? 按住说话，松开结束';
+                statusTip.textContent = MODE_META[currentMode].tip;
             }
         }, 1000);
     } catch (e) {
@@ -351,44 +411,59 @@ function stopRecording() {
 }
 
 // ---------- 辅助按钮 ----------
-// 拨打电话：模拟呼叫（实际可调起系统电话）
 callBtn.addEventListener('click', () => {
     if (!lastAssistantText) return;
-    // 尝试提取家人称呼，简单模拟
-    const msg = `要不要现在就打给家人？您可以说：${lastAssistantText}`;
-    alert(msg);
-    // 真实场景：可 prompt 用户确认后调起 tel:// 链接
-    // 例如：window.location.href = 'tel:13800138000';
+    const msg = `亲语帮您整理好了：\n${lastAssistantText}\n\n是否现在就打给家人？`;
+    if (confirm(msg)) {
+        window.location.href = 'tel:';
+    }
 });
 
-// 重新生成（再说一遍）
 regenerateBtn.addEventListener('click', () => {
     if (lastUserText) {
-        // 清除上一条机器人回复，重新处理
-        const botMessages = document.querySelectorAll('.msg-bot');
-        const lastBot = botMessages[botMessages.length - 1];
-        if (lastBot) {
-            lastBot.remove();
-        }
-        // 重新调用
-        handleUserSpeech(lastUserText);
+        const botMsgs = document.querySelectorAll('.msg-bot');
+        const lastBot = botMsgs[botMsgs.length - 1];
+        if (lastBot) lastBot.remove();
+        handleUserInput(lastUserText);
     }
 });
 
 // ---------- 初始化 ----------
 function init() {
-    // 预加载语音
-    if (synth) {
-        synth.getVoices();
-        synth.onvoiceschanged = () => { synth.getVoices(); };
+    if (window.speechSynthesis) {
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
-    setupRecordButton();
 
-    // 处理语音识别权限（部分浏览器需用户手势触发）
-    console.log('亲语已启动，按大按钮说话即可。');
+    if (SPEECH_SUPPORTED) {
+        setupRecordButton();
+    } else {
+        // iOS 降级：点击按钮触发语音输入提示
+        recordBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (isProcessing) return;
+            if (currentMode === 'vision') {
+                photoInput.click();
+                return;
+            }
+            // 提示用户使用键盘语音输入
+            const input = prompt('请在这里输入您想说的话：');
+            if (input && input.trim()) {
+                handleUserInput(input.trim());
+            }
+        });
+        recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+        photoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handlePhoto(file);
+            photoInput.value = '';
+        });
+        statusTip.textContent = '⌨️ 点击按钮，输入文字';
+    }
+
+    console.log('亲语已启动 | 模式:', currentMode, '| 语音支持:', SPEECH_SUPPORTED);
 }
 
-// DOM 加载完成后初始化
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
