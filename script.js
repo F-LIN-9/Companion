@@ -23,6 +23,9 @@ const callBtn = document.getElementById('callBtn');
 const regenerateBtn = document.getElementById('regenerateBtn');
 const photoInput = document.getElementById('photoInput');
 const modeBtns = document.querySelectorAll('.mode-btn');
+const textInputRow = document.getElementById('textInputRow');
+const textInput = document.getElementById('textInput');
+const sendBtn = document.getElementById('sendBtn');
 
 // ---------- 状态 ----------
 let currentMode = 'default';       // default | doctor | fraud | vision | medicine
@@ -274,7 +277,7 @@ function speakText(text) {
     const s = _ensureSynth();
     s.cancel();
 
-    setTimeout(() => {
+    const doSpeak = () => {
         const utter = new SpeechSynthesisUtterance(text);
         utter.lang = 'zh-CN';
         utter.rate = 0.9;
@@ -304,7 +307,18 @@ function speakText(text) {
         }
 
         s.speak(utter);
-    }, 100);
+
+        // iOS 有时 speak() 返回了但不播放，1.5秒后检查并重试
+        setTimeout(() => {
+            if (!s.speaking && !s.pending) {
+                s.cancel();
+                s.speak(utter);
+            }
+        }, 1500);
+    };
+
+    // iOS cancel() 后需要延迟
+    setTimeout(doSpeak, 150);
 }
 
 // ---------- 消息渲染 ----------
@@ -341,32 +355,42 @@ function setupRecordButton() {
         if (!recognition) return;
     }
 
-    // Pointer events 统一处理鼠标和触摸
-    recordBtn.addEventListener('pointerdown', (e) => {
+    // 按下：pointerdown + touchstart 双保险
+    const onDown = (e) => {
         e.preventDefault();
         if (isProcessing) return;
-
         if (currentMode === 'vision') {
             photoInput.click();
             return;
         }
-
         startRecording();
-    });
+    };
 
-    recordBtn.addEventListener('pointerup', (e) => {
+    // 松开：pointerup + touchend
+    const onUp = (e) => {
         e.preventDefault();
         if (isRecording) stopRecording();
-    });
+    };
 
-    recordBtn.addEventListener('pointerleave', () => {
+    // 滑出 / 取消
+    const onCancel = () => {
         if (isRecording) stopRecording();
-    });
+    };
 
-    recordBtn.addEventListener('pointercancel', () => {
-        if (isRecording) stopRecording();
-    });
+    recordBtn.addEventListener('pointerdown', onDown);
+    recordBtn.addEventListener('pointerup', onUp);
+    recordBtn.addEventListener('pointerleave', onCancel);
+    recordBtn.addEventListener('pointercancel', onCancel);
 
+    // 部分 Android WebView 不支持 pointer 事件，touch 作为兜底
+    recordBtn.addEventListener('touchstart', onDown, { passive: false });
+    recordBtn.addEventListener('touchend', onUp, { passive: false });
+    recordBtn.addEventListener('touchcancel', onCancel, { passive: false });
+
+    // 桌面端 mousedown 兜底（某些环境 pointer 事件也不触发）
+    recordBtn.addEventListener('mousedown', onDown);
+
+    // 阻止长按菜单
     recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // 拍照回传
@@ -413,10 +437,8 @@ function stopRecording() {
 // ---------- 辅助按钮 ----------
 callBtn.addEventListener('click', () => {
     if (!lastAssistantText) return;
-    const msg = `亲语帮您整理好了：\n${lastAssistantText}\n\n是否现在就打给家人？`;
-    if (confirm(msg)) {
-        window.location.href = 'tel:';
-    }
+    // 直接调起拨号界面（不指定号码，让老人自己输或选择联系人）
+    window.location.href = 'tel:';
 });
 
 regenerateBtn.addEventListener('click', () => {
@@ -438,7 +460,8 @@ function init() {
     if (SPEECH_SUPPORTED) {
         setupRecordButton();
     } else {
-        // iOS 降级：点击按钮触发语音输入提示
+        // iOS 降级：显示文本输入框 + 发送按钮
+        textInputRow.style.display = 'flex';
         recordBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             if (isProcessing) return;
@@ -446,19 +469,46 @@ function init() {
                 photoInput.click();
                 return;
             }
-            // 提示用户使用键盘语音输入
-            const input = prompt('请在这里输入您想说的话：');
-            if (input && input.trim()) {
-                handleUserInput(input.trim());
+            // 聚焦输入框，方便老人打字
+            textInput.focus();
+        });
+        recordBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (isProcessing) return;
+            if (currentMode === 'vision') {
+                photoInput.click();
+                return;
+            }
+            textInput.focus();
+        }, { passive: false });
+        recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // 发送按钮
+        sendBtn.addEventListener('click', () => {
+            const text = textInput.value.trim();
+            if (!text || isProcessing) return;
+            textInput.value = '';
+            handleUserInput(text);
+        });
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const text = textInput.value.trim();
+                if (!text || isProcessing) return;
+                textInput.value = '';
+                handleUserInput(text);
             }
         });
-        recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // 拍照
         photoInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) handlePhoto(file);
             photoInput.value = '';
         });
-        statusTip.textContent = '⌨️ 点击按钮，输入文字';
+
+        btnText.textContent = '点击 打字';
+        statusTip.textContent = '⌨️ 打字输入，点发送即可';
     }
 
     console.log('亲语已启动 | 模式:', currentMode, '| 语音支持:', SPEECH_SUPPORTED);

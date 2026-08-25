@@ -31,6 +31,12 @@
         <footer>
             <div id="statusTip">🎤 按住说话，松开结束</div>
 
+            <!-- iOS 文本输入降级（默认隐藏） -->
+            <div id="textInputRow" class="text-input-row" style="display:none">
+                <input type="text" id="textInput" class="text-input" placeholder="在这里打字，点发送……" />
+                <button id="sendBtn" class="send-btn">发送</button>
+            </div>
+
             <!-- 功能模式切换 -->
             <div class="mode-bar">
                 <button class="mode-btn active" data-mode="default">💬 帮我说清</button>
