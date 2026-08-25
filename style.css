@@ -191,7 +191,7 @@ footer {
     gap: 14px;
     transition: all 0.08s ease;
     cursor: pointer;
-    touch-action: none;
+    touch-action: manipulation;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     letter-spacing: 2px;
