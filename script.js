@@ -75,7 +75,7 @@ function switchMode(mode) {
 
 modeBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        if (isProcessing) return;
+        if (isProcessing || isRecording) return;
         switchMode(btn.dataset.mode);
     });
 });
@@ -355,10 +355,16 @@ function setupRecordButton() {
         if (!recognition) return;
     }
 
-    // 按下：pointerdown + touchstart 双保险
+    let _lastDownTime = 0;
+
+    // 按下：pointerdown + touchstart 双保险（带防抖，250ms 内只触发一次）
     const onDown = (e) => {
         e.preventDefault();
-        if (isProcessing) return;
+        const now = Date.now();
+        if (now - _lastDownTime < 250) return;
+        _lastDownTime = now;
+
+        if (isProcessing || isRecording) return;
         if (currentMode === 'vision') {
             photoInput.click();
             return;
@@ -369,12 +375,18 @@ function setupRecordButton() {
     // 松开：pointerup + touchend
     const onUp = (e) => {
         e.preventDefault();
-        if (isRecording) stopRecording();
+        if (isRecording) {
+            _lastDownTime = 0;
+            stopRecording();
+        }
     };
 
     // 滑出 / 取消
     const onCancel = () => {
-        if (isRecording) stopRecording();
+        if (isRecording) {
+            _lastDownTime = 0;
+            stopRecording();
+        }
     };
 
     recordBtn.addEventListener('pointerdown', onDown);
@@ -387,8 +399,7 @@ function setupRecordButton() {
     recordBtn.addEventListener('touchend', onUp, { passive: false });
     recordBtn.addEventListener('touchcancel', onCancel, { passive: false });
 
-    // 桌面端 mousedown 兜底（某些环境 pointer 事件也不触发）
-    recordBtn.addEventListener('mousedown', onDown);
+    // 注意：不绑定 mousedown，移动端 touch 会 300ms 后触发合成 mousedown，导致松手后再次录音
 
     // 阻止长按菜单
     recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -419,19 +430,18 @@ function startRecording() {
 }
 
 function stopRecording() {
-    if (!recognition) return;
+    if (!recognition || !isRecording) return;
+    isRecording = false;
+    recordBtn.classList.remove('recording');
     try {
         recognition.stop();
-        setTimeout(() => {
-            if (isRecording) {
-                resetButton();
-                statusTip.textContent = MODE_META[currentMode].tip;
-            }
-        }, 1000);
     } catch (e) {
-        console.warn('stopRecording error:', e);
-        resetButton();
+        // 忽略 already stopped 等错误
     }
+    setTimeout(() => {
+        resetButton();
+        statusTip.textContent = MODE_META[currentMode].tip;
+    }, 500);
 }
 
 // ---------- 辅助按钮 ----------
@@ -462,25 +472,23 @@ function init() {
     } else {
         // iOS 降级：显示文本输入框 + 发送按钮
         textInputRow.style.display = 'flex';
-        recordBtn.addEventListener('pointerdown', (e) => {
+
+        let _iosLastTap = 0;
+        const onIosTap = (e) => {
             e.preventDefault();
-            if (isProcessing) return;
-            if (currentMode === 'vision') {
-                photoInput.click();
-                return;
-            }
-            // 聚焦输入框，方便老人打字
-            textInput.focus();
-        });
-        recordBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
+            const now = Date.now();
+            if (now - _iosLastTap < 250) return;
+            _iosLastTap = now;
             if (isProcessing) return;
             if (currentMode === 'vision') {
                 photoInput.click();
                 return;
             }
             textInput.focus();
-        }, { passive: false });
+        };
+
+        recordBtn.addEventListener('pointerdown', onIosTap);
+        recordBtn.addEventListener('touchstart', onIosTap, { passive: false });
         recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
         // 发送按钮
