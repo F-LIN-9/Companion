@@ -350,43 +350,51 @@ function updateBotMessage(msgEl, newContent) {
 
 // ---------- 录音按钮交互 ----------
 function setupRecordButton() {
+    // 尝试初始化语音识别（可能失败，但不影响按钮事件绑定）
     if (!recognition) {
         recognition = initSpeechRecognition();
-        if (!recognition) return;
     }
 
-    let _lastDownTime = 0;
+    let _touchHandled = false;
 
-    // 按下：pointerdown + touchstart 双保险（带防抖，250ms 内只触发一次）
+    // 按下：pointerdown + touchstart 双保险（标志位防抖，只触发一次）
     const onDown = (e) => {
         e.preventDefault();
-        const now = Date.now();
-        if (now - _lastDownTime < 250) return;
-        _lastDownTime = now;
+        if (_touchHandled) return;
+        _touchHandled = true;
 
-        if (isProcessing || isRecording) return;
+        if (isProcessing) return;
+
         if (currentMode === 'vision') {
             photoInput.click();
+            _touchHandled = false;
             return;
         }
-        startRecording();
+
+        if (recognition) {
+            startRecording();
+        } else {
+            // 语音不可用：显示文字输入
+            if (textInputRow.style.display === 'none') {
+                textInputRow.style.display = 'flex';
+            }
+            textInput.focus();
+            statusTip.textContent = '⌨️ 打字输入，点发送即可';
+            setTimeout(() => { _touchHandled = false; }, 300);
+        }
     };
 
     // 松开：pointerup + touchend
     const onUp = (e) => {
         e.preventDefault();
-        if (isRecording) {
-            _lastDownTime = 0;
-            stopRecording();
-        }
+        _touchHandled = false;
+        if (isRecording) stopRecording();
     };
 
     // 滑出 / 取消
     const onCancel = () => {
-        if (isRecording) {
-            _lastDownTime = 0;
-            stopRecording();
-        }
+        _touchHandled = false;
+        if (isRecording) stopRecording();
     };
 
     recordBtn.addEventListener('pointerdown', onDown);
@@ -398,8 +406,6 @@ function setupRecordButton() {
     recordBtn.addEventListener('touchstart', onDown, { passive: false });
     recordBtn.addEventListener('touchend', onUp, { passive: false });
     recordBtn.addEventListener('touchcancel', onCancel, { passive: false });
-
-    // 注意：不绑定 mousedown，移动端 touch 会 300ms 后触发合成 mousedown，导致松手后再次录音
 
     // 阻止长按菜单
     recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -467,59 +473,39 @@ function init() {
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
 
-    if (SPEECH_SUPPORTED) {
-        setupRecordButton();
-    } else {
-        // iOS 降级：显示文本输入框 + 发送按钮
-        textInputRow.style.display = 'flex';
+    // 统一初始化按钮事件（语音可用→录音，不可用→打字）
+    setupRecordButton();
 
-        let _iosLastTap = 0;
-        const onIosTap = (e) => {
+    // 发送按钮
+    sendBtn.addEventListener('click', () => {
+        const text = textInput.value.trim();
+        if (!text || isProcessing) return;
+        textInput.value = '';
+        handleUserInput(text);
+    });
+    textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
             e.preventDefault();
-            const now = Date.now();
-            if (now - _iosLastTap < 250) return;
-            _iosLastTap = now;
-            if (isProcessing) return;
-            if (currentMode === 'vision') {
-                photoInput.click();
-                return;
-            }
-            textInput.focus();
-        };
-
-        recordBtn.addEventListener('pointerdown', onIosTap);
-        recordBtn.addEventListener('touchstart', onIosTap, { passive: false });
-        recordBtn.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        // 发送按钮
-        sendBtn.addEventListener('click', () => {
             const text = textInput.value.trim();
             if (!text || isProcessing) return;
             textInput.value = '';
             handleUserInput(text);
-        });
-        textInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const text = textInput.value.trim();
-                if (!text || isProcessing) return;
-                textInput.value = '';
-                handleUserInput(text);
-            }
-        });
+        }
+    });
 
-        // 拍照
-        photoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handlePhoto(file);
-            photoInput.value = '';
-        });
+    // 拍照
+    photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handlePhoto(file);
+        photoInput.value = '';
+    });
 
+    if (!recognition) {
         btnText.textContent = '点击 打字';
         statusTip.textContent = '⌨️ 打字输入，点发送即可';
     }
 
-    console.log('亲语已启动 | 模式:', currentMode, '| 语音支持:', SPEECH_SUPPORTED);
+    console.log('亲语已启动 | 模式:', currentMode, '| 语音支持:', !!recognition);
 }
 
 if (document.readyState === 'loading') {
