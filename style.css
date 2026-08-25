@@ -10,10 +10,9 @@ body {
     background: #f5f1eb;
     color: #2c2c2c;
     height: 100vh;
-    height: 100dvh;              /* 动态视口，iOS Safari 兼容 */
+    height: 100dvh;
     overflow: hidden;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;  /* 去掉点击高亮 */
+    -webkit-tap-highlight-color: transparent;
 }
 
 #app {
@@ -193,6 +192,7 @@ footer {
     cursor: pointer;
     touch-action: manipulation;
     -webkit-touch-callout: none;
+    user-select: none;
     -webkit-user-select: none;
     letter-spacing: 2px;
 }
