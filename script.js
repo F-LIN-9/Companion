@@ -353,33 +353,50 @@ function setupRecordButton() {
         recognition = initSpeechRecognition();
     }
 
-    // 按下
+    // 调试：确认按钮存在
+    console.log('setupRecordButton called, recordBtn:', recordBtn);
+
+    // 按下 - 同时绑定 click 作为兜底
     recordBtn.addEventListener('touchstart', function(e) {
         e.preventDefault();
+        console.log('touchstart fired');
         handleDown();
     }, { passive: false });
 
     recordBtn.addEventListener('mousedown', function(e) {
         e.preventDefault();
+        console.log('mousedown fired');
         handleDown();
+    });
+
+    // 点击兜底（语音不可用时）
+    recordBtn.addEventListener('click', function(e) {
+        console.log('click fired, recognition:', !!recognition, 'isRecording:', isRecording);
+        if (!recognition && !isRecording) {
+            handleDown();
+        }
     });
 
     // 松开
     recordBtn.addEventListener('touchend', function(e) {
         e.preventDefault();
+        console.log('touchend fired');
         handleUp();
     }, { passive: false });
 
     recordBtn.addEventListener('mouseup', function(e) {
         e.preventDefault();
+        console.log('mouseup fired');
         handleUp();
     });
 
     recordBtn.addEventListener('touchcancel', function(e) {
+        console.log('touchcancel fired');
         handleUp();
     });
 
     recordBtn.addEventListener('mouseleave', function(e) {
+        console.log('mouseleave fired');
         handleUp();
     });
 

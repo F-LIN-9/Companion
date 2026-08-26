@@ -195,6 +195,10 @@ footer {
     user-select: none;
     -webkit-user-select: none;
     letter-spacing: 2px;
+    /* 确保可点击 */
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
 }
 
 .record-btn:active {
