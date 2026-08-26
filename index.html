@@ -46,7 +46,13 @@
             </div>
 
             <!-- 主录音按钮 -->
-            <div id="recordBtn" class="record-btn" role="button" tabindex="0">
+            <div id="recordBtn" class="record-btn" role="button"
+                 onpointerdown="handleDown()"
+                 onpointerup="handleUp()"
+                 onpointerleave="handleUp()"
+                 onpointercancel="handleUp()"
+                 onclick="handleDown()"
+                 oncontextmenu="return false">
                 <span id="btnIcon">🎤</span>
                 <span id="btnText">按住 说话</span>
             </div>

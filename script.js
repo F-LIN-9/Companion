@@ -347,89 +347,27 @@ function updateBotMessage(msgEl, newContent) {
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
 }
 
-// ---------- 录音按钮交互 ----------
-function setupRecordButton() {
-    if (!recognition) {
-        recognition = initSpeechRecognition();
-    }
-
-    // 调试：确认按钮存在
-    console.log('setupRecordButton called, recordBtn:', recordBtn);
-
-    // 按下 - 同时绑定 click 作为兜底
-    recordBtn.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        console.log('touchstart fired');
-        handleDown();
-    }, { passive: false });
-
-    recordBtn.addEventListener('mousedown', function(e) {
-        e.preventDefault();
-        console.log('mousedown fired');
-        handleDown();
-    });
-
-    // 点击兜底（语音不可用时）
-    recordBtn.addEventListener('click', function(e) {
-        console.log('click fired, recognition:', !!recognition, 'isRecording:', isRecording);
-        if (!recognition && !isRecording) {
-            handleDown();
-        }
-    });
-
-    // 松开
-    recordBtn.addEventListener('touchend', function(e) {
-        e.preventDefault();
-        console.log('touchend fired');
-        handleUp();
-    }, { passive: false });
-
-    recordBtn.addEventListener('mouseup', function(e) {
-        e.preventDefault();
-        console.log('mouseup fired');
-        handleUp();
-    });
-
-    recordBtn.addEventListener('touchcancel', function(e) {
-        console.log('touchcancel fired');
-        handleUp();
-    });
-
-    recordBtn.addEventListener('mouseleave', function(e) {
-        console.log('mouseleave fired');
-        handleUp();
-    });
-
-    // 阻止长按菜单
-    recordBtn.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
-
-    // 拍照回传
-    photoInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) handlePhoto(file);
-        photoInput.value = '';
-    });
-}
-
+// ---------- 录音按钮交互（全局函数，被 HTML inline handler 调用）----------
 function handleDown() {
-    if (isProcessing) return;
-
-    if (currentMode === 'vision') {
-        photoInput.click();
-        return;
-    }
-
-    if (!recognition) {
-        if (textInputRow.style.display === 'none') textInputRow.style.display = 'flex';
-        textInput.focus();
-        statusTip.textContent = '⌨️ 打字输入，点发送即可';
-        return;
-    }
-
-    _warmUpSpeech();
     try {
+        if (isProcessing) return;
+
+        if (currentMode === 'vision') {
+            photoInput.click();
+            statusTip.textContent = '📷 正在打开相机……';
+            return;
+        }
+
+        if (!recognition) {
+            textInputRow.style.display = 'flex';
+            textInput.focus();
+            statusTip.textContent = '⌨️ 打字输入，点发送即可';
+            btnIcon.textContent = '⌨️';
+            btnText.textContent = '点击 打字';
+            return;
+        }
+
+        _warmUpSpeech();
         recognition.start();
         isRecording = true;
         recordBtn.classList.add('recording');
@@ -437,20 +375,24 @@ function handleDown() {
         btnText.textContent = '松开 结束';
         statusTip.textContent = '🎙️ 正在听，慢慢说……';
     } catch (err) {
-        console.warn('startRecording error:', err);
-        statusTip.textContent = '❌ 语音启动失败';
+        console.warn('handleDown error:', err);
+        statusTip.textContent = '❌ 出了点小问题，再试一次';
     }
 }
 
 function handleUp() {
-    if (!isRecording) return;
-    isRecording = false;
-    recordBtn.classList.remove('recording');
-    try { recognition.stop(); } catch (_) {}
-    setTimeout(function() {
-        resetButton();
-        statusTip.textContent = MODE_META[currentMode].tip;
-    }, 500);
+    try {
+        if (!isRecording) return;
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        try { recognition.stop(); } catch (_) {}
+        setTimeout(function() {
+            resetButton();
+            statusTip.textContent = MODE_META[currentMode].tip;
+        }, 500);
+    } catch (err) {
+        console.warn('handleUp error:', err);
+    }
 }
 
 // ---------- 辅助按钮 ----------
@@ -471,13 +413,13 @@ regenerateBtn.addEventListener('click', () => {
 
 // ---------- 初始化 ----------
 function init() {
+    // 初始化语音识别
+    recognition = initSpeechRecognition();
+
     if (window.speechSynthesis) {
         window.speechSynthesis.getVoices();
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
-
-    // 统一初始化按钮事件（语音可用→录音，不可用→打字）
-    setupRecordButton();
 
     // 发送按钮
     sendBtn.addEventListener('click', () => {
@@ -496,7 +438,7 @@ function init() {
         }
     });
 
-    // 拍照
+    // 拍照回传
     photoInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) handlePhoto(file);
